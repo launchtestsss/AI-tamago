@@ -35,6 +35,8 @@ export function Tamagotchi() {
   const [tamaStatus, setTamaStatus] = useState(DEFAULT_STATUS);
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [isInteracting, setIsInteracting] = useState(false);
+  // Add new state for error handling
+  const [error, setError] = useState<string | null>(null);
 
   //TODO - call init endpoint to determine if tamagotchi is initialized. if not generate one.
 
@@ -107,147 +109,68 @@ export function Tamagotchi() {
     }
   };
 
-  const handleBath = async () => {
-    setIsLoading(true);
+  const handleTamagotchiInteraction = async (
+    interactionType: INTERACTION,
+    statusMessage: string
+  ) => {
     setIsInteracting(true);
-    setTamaStatus("Bathing");
+    setIsLoading(true);
+    setTamaStatus(statusMessage);
+
     try {
       const response = await fetch("/api/interact", {
         method: "POST",
-        body: JSON.stringify({
-          interactionType: INTERACTION.BATH,
-        }),
+        body: JSON.stringify({ interactionType }),
         headers: {
           "Content-Type": "application/json",
         },
       });
-      const responseText = await response.text();
-      handleResponse(responseText);
-    } catch (e) {
-      console.log(e);
-    }
 
-    setTimeout(() => {
-      setAnimation(idle);
-      setTamaStatus(DEFAULT_STATUS);
-      setIsInteracting(false);
+      if (response.ok) {
+        const responseText = await response.text();
+        handleResponse(responseText);
+      } else if (response.status === 429) {
+        setTamaStatus("Please wait before trying again!");
+        setError("Too many requests. Please wait a moment.");
+      } else {
+        setTamaStatus("Something went wrong!");
+        setError(`Error: ${response.status} - ${response.statusText}`);
+      }
+    } catch (error) {
+      console.error("error", error);
+      setError(
+        `Error: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
+    } finally {
       setIsLoading(false);
-    }, 9000);
+
+      // Reset everything after delay
+      setTimeout(() => {
+        setAnimation(idle);
+        setTamaStatus(DEFAULT_STATUS);
+        setIsInteracting(false);
+        setError(null);
+      }, 9000);
+    }
   };
 
-  const feedTamagotchi = async (e: any) => {
-    setIsInteracting(true);
-    setIsLoading(true);
-    // Add logic to feed the Tamagotchi here
-    setTamaStatus("Feeding");
-    try {
-      const response = await fetch("/api/interact", {
-        method: "POST",
-        body: JSON.stringify({
-          interactionType: INTERACTION.FEED,
-        }),
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      const responseText = await response.text();
-      setIsLoading(false);
-      handleResponse(responseText);
-    } catch (e) {
-      console.log(e);
-    }
+  const feedTamagotchi = () =>
+    handleTamagotchiInteraction(INTERACTION.FEED, "Feeding");
 
-    console.log("Tamagotchi fed!");
+  const playWithTamagotchi = () =>
+    handleTamagotchiInteraction(INTERACTION.PLAY, "Playing");
 
-    // TODO - there may be a race condition here if user clicks the button too fast?
-    setTimeout(() => {
-      setAnimation(idle);
-      setTamaStatus(DEFAULT_STATUS);
-      setIsInteracting(false);
-    }, 9000);
-  };
+  const handleBath = () =>
+    handleTamagotchiInteraction(INTERACTION.BATH, "Bathing");
 
-  const playWithTamagotchi = async (e: any) => {
-    // Add logic to feed the Tamagotchi here
-    setIsLoading(true);
-    setTamaStatus("Playing");
-    setIsInteracting(true);
-    try {
-      const response = await fetch("/api/interact", {
-        method: "POST",
-        body: JSON.stringify({
-          interactionType: INTERACTION.PLAY,
-        }),
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      const responseText = await response.text();
-      setIsLoading(false);
-      handleResponse(responseText);
-    } catch (e) {
-      console.log(e);
-    }
-    setTimeout(() => {
-      setAnimation(idle);
-      setTamaStatus(DEFAULT_STATUS);
-      setIsInteracting(false);
-    }, 9000);
-  };
+  const treatSickTamagotchi = () =>
+    handleTamagotchiInteraction(
+      INTERACTION.GO_TO_HOSPITAL,
+      "Going to hospital"
+    );
 
-  const treatSickTamagotchi = async (e: any) => {
-    setIsLoading(true);
-    setTamaStatus("Going to hospital");
-    setIsInteracting(true);
-    try {
-      const response = await fetch("/api/interact", {
-        method: "POST",
-        body: JSON.stringify({
-          interactionType: INTERACTION.GO_TO_HOSPITAL,
-        }),
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      const responseText = await response.text();
-      handleResponse(responseText);
-    } catch (e) {
-      console.log(e);
-    }
-    setTimeout(() => {
-      setAnimation(idle);
-      setTamaStatus(DEFAULT_STATUS);
-      setIsInteracting(false);
-      setIsLoading(false);
-    }, 9000);
-  };
-
-  const handleDiscipline = async () => {
-    setIsLoading(true);
-    setTamaStatus("Discipling");
-    setIsInteracting(true);
-    try {
-      const response = await fetch("/api/interact", {
-        method: "POST",
-        body: JSON.stringify({
-          interactionType: INTERACTION.DISCIPLINE,
-        }),
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      const responseText = await response.text();
-      setIsLoading(false);
-      handleResponse(responseText);
-    } catch (e) {
-      console.log(e);
-    }
-    setTimeout(() => {
-      setAnimation(idle);
-      setTamaStatus(DEFAULT_STATUS);
-      setIsInteracting(false);
-    }, 9000);
-  };
+  const handleDiscipline = () =>
+    handleTamagotchiInteraction(INTERACTION.DISCIPLINE, "Disciplining");
 
   const checkStatus = () => {
     setIsLoading(true);
@@ -275,6 +198,11 @@ export function Tamagotchi() {
         <CardDescription className="text-sm text-gray-500 dark:text-gray-400">
           Care for your virtual pet!
         </CardDescription>
+        {error && (
+          <div className="text-red-500 text-sm bg-red-100 p-2 rounded-md">
+            {error}
+          </div>
+        )}
         <div className="flex justify-center">
           <div className="flex items-center justify-center h-48 overflow-hidden">
             {!checkingStatus && (

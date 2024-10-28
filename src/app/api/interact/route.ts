@@ -1,3 +1,4 @@
+import arcjet, { tokenBucket } from "@arcjet/next";
 import dotenv from "dotenv";
 import { NextResponse } from "next/server";
 import MemoryManager from "@/app/utils/memory";
@@ -26,7 +27,34 @@ dotenv.config({ path: `.env.local` });
 let status = "";
 const recentFood: string[] = [];
 
+// Initialize Arcjet with rate limiting
+const aj = arcjet({
+  key: process.env.ARCJET_KEY!, // Get your site key from https://app.arcjet.com
+  characteristics: ["userId"], // Track requests by IP
+  rules: [
+    // Create a token bucket rate limit. Other algorithms are supported.
+    tokenBucket({
+      mode: "LIVE",
+      refillRate: 1, // Refill 5 tokens per interval
+      interval: 60, // Refill every 10 seconds
+      capacity: 1, // Bucket capacity of 10 tokens
+    }),
+  ],
+});
+
 export async function POST(req: Request) {
+  // Check rate limit before processing
+  const userId = "blah";
+  const decision = await aj.protect(req, { userId, requested: 1 });
+  console.log("decision", decision);
+
+  if (decision.isDenied()) {
+    return NextResponse.json(
+      { error: "Too many requests", reason: decision.reason },
+      { status: 429 }
+    );
+  }
+
   const { interactionType } = await req.json();
   console.debug("interactionType", interactionType);
   let animation = idle;
@@ -108,8 +136,8 @@ export async function POST(req: Request) {
         const eatingAnimation: string[] = refuseToEat
           ? vomiting
           : eating.map((frame) => {
-            return frame.replace("{{FOOD_EMOJI}}", emoji);
-          });
+              return frame.replace("{{FOOD_EMOJI}}", emoji);
+            });
 
         animation = eatingAnimation;
         await stateManager.saveInteraction(
